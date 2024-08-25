@@ -24,6 +24,7 @@ cflags = (
     # Compile-time optimisation
     '-Os',  # reduces the code size about in half comparing to -O2
     '-flto',
+    '-Isrc',
 )
 emflags = (
     # Base
@@ -51,6 +52,8 @@ def build(src: Path, dst: Path):
     subprocess.check_call([
         'emcc',
         *cflags,
+        '-include', src / 'regexp/constants.h',
+        '-include', src / 'regexp/regexp.h',
         '-c', src / 'sqlite3.c',
         '-o', out / 'sqlite3.o',
     ])
@@ -61,13 +64,23 @@ def build(src: Path, dst: Path):
         '-c', src / 'extension-functions.c',
         '-o', out / 'extension-functions.o',
     ])
+    logging.info('Building LLVM bitcode for regex with PCRE2')
+    subprocess.check_call([
+        'emcc',
+        *cflags,
+        '-include', src / 'regexp/constants.h',
+        '-shared', src / 'regexp/regexp.c', *(src / 'regexp/pcre2/').glob('*.c'),
+        '-o', out / 'regexp.o',
+    ])
 
     logging.info('Building WASM from bitcode')
     subprocess.check_call([
         'emcc',
         *emflags,
+        '-s', 'EMULATE_FUNCTION_POINTER_CASTS=1',
         out / 'sqlite3.o',
         out / 'extension-functions.o',
+        out / 'regexp.o',
         '-o', out / 'sql-wasm.js',
     ])
 

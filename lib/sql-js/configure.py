@@ -23,16 +23,19 @@ extension_urls = (
     ('https://sqlite.org/src/raw/8d79354f?at=series.c', 'sqlite3_series_init'),
     ('https://sqlite.org/src/raw/dbfd8543?at=closure.c', 'sqlite3_closure_init'),
     ('https://sqlite.org/src/raw/5bb2264c?at=uuid.c', 'sqlite3_uuid_init'),
-    ('https://sqlite.org/src/raw/5853b0e5?at=regexp.c', 'sqlite3_regexp_init'),
     ('https://sqlite.org/src/raw/b9086e22?at=percentile.c', 'sqlite3_percentile_init'),
     ('https://sqlite.org/src/raw/09f967dc?at=decimal.c', 'sqlite3_decimal_init'),
     # Third-party extension
     # =====================
     ('https://github.com/jakethaw/pivot_vtab/raw/9323ef93/pivot_vtab.c', 'sqlite3_pivotvtab_init'),
     ('https://github.com/nalgeon/sqlean/raw/95e8d21a/src/pearson.c', 'sqlite3_pearson_init'),
+    # Third-party extension with own dependencies
+    # ===========================================
+    ('https://github.com/nalgeon/sqlean/raw/82bdff3b/src/regexp/extension.c', 'regexp_init'),
 )
 
 sqljs_url = 'https://github.com/sql-js/sql.js/archive/refs/tags/v1.7.0.zip'
+pcre_url = 'https://github.com/nalgeon/sqlean/archive/82bdff3b.zip'
 
 
 def _generate_extra_init_c_function(init_function_names):
@@ -57,6 +60,24 @@ def _get_amalgamation(tgt: Path):
     for zpath in archive_root_dir.iterdir():
         with zpath.open() as fr, (tgt / zpath.name).open('wb') as fw:
             shutil.copyfileobj(fr, fw)
+
+
+def _get_pcre2(tgt: Path):
+    logging.info('Downloading and extracting PCRE2 %s', pcre_url)
+    archive = zipfile.ZipFile(BytesIO(request.urlopen(pcre_url).read()))
+    archive_root_dir = zipfile.Path(archive, archive.namelist()[0])
+    (tgt / 'regexp' / 'pcre2').mkdir(parents=True)
+
+    # Extract PCRE2
+    for zpath in (archive_root_dir / 'src' / 'regexp' / 'pcre2').iterdir():
+        with zpath.open() as fr, (tgt / 'regexp' / 'pcre2' / zpath.name).open('wb') as fw:
+            shutil.copyfileobj(fr, fw)
+
+    # Extract the extension
+    for zpath in (archive_root_dir / 'src' / 'regexp').iterdir():
+        if zpath.is_file():
+            with zpath.open() as fr, (tgt / 'regexp' / zpath.name).open('wb') as fw:
+                shutil.copyfileobj(fr, fw)
 
 
 def _get_contrib_functions(tgt: Path):
@@ -91,6 +112,7 @@ def configure(tgt: Path):
     _get_amalgamation(tgt)
     _get_contrib_functions(tgt)
     _get_extensions(tgt)
+    _get_pcre2(tgt)
     _get_sqljs(tgt)
 
     subprocess.check_call(['emcc', '--version'])
